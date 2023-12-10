@@ -2982,9 +2982,8 @@ function HealComm:UNIT_SPELLCAST_START(unit, cast, spellID)
 	elseif glyphCache[55440] and not castUnit and PlayerTargetSpells[spellName] then -- Glyph of Healing Wave
 		castUnit = unit
 	end
-	if( not castGUID or not castUnit ) then
-		return
-	end
+	
+	if( not castGUID ) then	return	end
 
 	-- Figure out who we are healing and for how much
 	local bitType, amount, ticks, tickInterval = CalculateHealing(castGUID, spellID, castUnit)
@@ -2997,9 +2996,11 @@ function HealComm:UNIT_SPELLCAST_START(unit, cast, spellID)
 	if( bitType == DIRECT_HEALS ) then
 		local startTime, endTime = select(4, CastingInfo())
 		parseDirectHeal(playerGUID, spellID, amount, (endTime - startTime) / 1000, strsplit(",", targets))
+		if(not castUnit) then return end --show predictive healing for non raid members but dont broadcast message
 		sendMessage(format("D:%.3f:%d:%d:%s", (endTime - startTime) / 1000, spellID or 0, amount or "", targets))
 	elseif( bitType == CHANNEL_HEALS ) then
 		parseChannelHeal(playerGUID, spellID, amount, ticks, string.split(",", targets))
+		if(not castUnit) then return end --show predictive healing for non raid members but dont broadcast message
 		if spellName == "Penance" then
 			-- Penance has its first tick already done by the time this arrives
 			sendMessage(string.format("C::%d:%d:%s:%s", spellID, amount, ticks - 1, targets))
