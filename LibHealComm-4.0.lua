@@ -986,19 +986,6 @@ if( playerClass == "DRUID" ) then
 					end
 				end
 				return targets
-			elseif( not isWrath and spellName == WildGrowth ) then
-				-- Wild Growth can be casted on other groups than your own
-				local targets = compressGUID[guid]
-				local group = guidToGroup[guid]
-	
-				for groupGUID, id in pairs(guidToGroup) do
-					--We skip the rangecheck since range would have to be measured from our target to its party and we can't do that
-					local testUnit = guidToUnit[groupGUID]
-					if( id == group and guid ~= groupGUID and UnitIsVisible(testUnit) and not UnitHasVehicleUI(testUnit) ) then
-						targets = targets .. "," .. compressGUID[groupGUID]
-					end
-				end
-				return targets
 			end
 			return compressGUID[guid]
 		end
@@ -2983,7 +2970,9 @@ function HealComm:UNIT_SPELLCAST_START(unit, cast, spellID)
 		castUnit = unit
 	end
 	
-	if( not castGUID ) then	return	end
+	if( not castGUID or not castUnit ) then
+		return
+	end
 
 	-- Figure out who we are healing and for how much
 	local bitType, amount, ticks, tickInterval = CalculateHealing(castGUID, spellID, castUnit)
@@ -2996,11 +2985,9 @@ function HealComm:UNIT_SPELLCAST_START(unit, cast, spellID)
 	if( bitType == DIRECT_HEALS ) then
 		local startTime, endTime = select(4, CastingInfo())
 		parseDirectHeal(playerGUID, spellID, amount, (endTime - startTime) / 1000, strsplit(",", targets))
-		if(not castUnit) then return end --show predictive healing for non raid members but dont broadcast message
 		sendMessage(format("D:%.3f:%d:%d:%s", (endTime - startTime) / 1000, spellID or 0, amount or "", targets))
 	elseif( bitType == CHANNEL_HEALS ) then
 		parseChannelHeal(playerGUID, spellID, amount, ticks, string.split(",", targets))
-		if(not castUnit) then return end --show predictive healing for non raid members but dont broadcast message
 		if spellName == "Penance" then
 			-- Penance has its first tick already done by the time this arrives
 			sendMessage(string.format("C::%d:%d:%s:%s", spellID, amount, ticks - 1, targets))
