@@ -806,9 +806,9 @@ end
 local CalculateHealing, GetHealTargets, AuraHandler, CalculateHotHealing, ResetChargeData, LoadClassData
 
 local function getBaseHealAmount(spellData, spellName, spellID, spellRank)
-	if(not spellRank) then 
-		error(spellName.." has no spellRank")
-	end
+	--New SOD Runes will have no spellrank until healcomm updated.
+	if(not spellRank) then return 0 end
+
 	if spellID == 37563 then
 		spellData = spellData["37563"]
 	else
