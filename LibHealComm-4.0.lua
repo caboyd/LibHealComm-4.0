@@ -1,5 +1,5 @@
 local major = "LibHealComm-4.0"
-local minor = 110
+local minor = 111
 assert(LibStub, format("%s requires LibStub.", major))
 
 local HealComm = LibStub:NewLibrary(major, minor)
@@ -83,7 +83,7 @@ local isTBC = build == 2
 local isWrath = build == 3
 
 local spellRankTableData = {
-	[1] = { 774, 8936, 5185, 740, 635, 19750, 139, 2060, 596, 2061, 2054, 2050, 1064, 331, 8004, 136, 755, 689, 746, 33763, 32546, 37563, 48438, 61295, 51945, 50464, 47757 },
+	[1] = { 774, 8936, 5185, 740, 635, 19750, 139, 2060, 596, 2061, 2054, 2050, 1064, 331, 8004, 136, 755, 689, 746, 33763, 32546, 37563, 48438, 61295, 51945, 50464, 47757, 408120, 408124, 402277, 415236, 412510, 401417 },
 	[2] = { 1058, 8938, 5186, 8918, 639, 19939, 6074, 10963, 996, 9472, 2055, 2052, 10622, 332, 8008, 3111, 3698, 699, 1159, 53248, 61299, 51990, 48450, 52986, 48119 },
 	[3] = { 1430, 8939, 5187, 9862, 647, 19940, 6075, 10964, 10960, 9473, 6063, 2053, 10623, 547, 8010, 3661, 3699, 709, 3267, 53249, 61300, 51997, 48451, 52987, 48120 },
 	[4] = { 2090, 8940, 5188, 9863, 1026, 19941, 6076, 10965, 10961, 9474, 6064, 913, 10466, 3662, 3700, 7651, 3268, 25422, 53251, 61301, 51998, 52988 },
@@ -819,6 +819,14 @@ local function getBaseHealAmount(spellData, spellName, spellID, spellRank)
 	return average[min(playerLevel - requiresLevel + 1, #average)]
 end
 
+local function generateSODAverages(baseAmount, levelCoeff, levelScaling, levelScalingSquared) 
+	local averages = {}
+	for lvl=1,60 do
+		averages[lvl] = levelCoeff * (baseAmount + levelScaling * lvl + levelScalingSquared * lvl * lvl)
+	end
+	return {averages}
+end
+
 if( playerClass == "DRUID" ) then
 	LoadClassData = function()
 		local GiftofNature = GetSpellInfo(17104)
@@ -839,13 +847,16 @@ if( playerClass == "DRUID" ) then
 		local TreeofLife = GetSpellInfo(33891) or "Tree of Life"
 
 		hotData[Regrowth] = { interval = 3, ticks = 7, coeff = (isTBC or isWrath) and 0.7 or 0.5, levels = { 12, 18, 24, 30, 36, 42, 48, 54, 60, 65, 71, 77 }, averages = { 98, 175, 259, 343, 427, 546, 686, 861, 1064, 1274, 1792, 2345 }}
+		hotData[Rejuvenation] = { interval = 3, levels = { 4, 10, 16, 22, 28, 34, 40, 46, 52, 58, 60, 63, 69 }, averages = { 32, 56, 116, 180, 244, 304, 388, 488, 608, 756, 888, 932, 1060 }}
 		if isWrath then
 			hotData[Rejuvenation] = { interval = 3, levels = { 4, 10, 16, 22, 28, 34, 40, 46, 52, 58, 60, 63, 69, 75, 80 }, averages = { 40, 70, 145, 225, 305, 380, 485, 610, 760, 945, 1110, 1165, 1325, 1490, 1690 }}
 			hotData[Lifebloom] = {interval = 1, ticks = 7, coeff = 0.66626, dhCoeff = 0.517928287, levels = {64, 72, 80}, averages = {224, 287, 371}, bomb = {480, 616, 776}}
 			hotData[WildGrowth] = {interval = 1, ticks = 7, coeff = 0.8056, levels = {60, 70, 75, 80}, averages = {686, 861, 1239, 1442}}
-		else
-			hotData[Rejuvenation] = { interval = 3, levels = { 4, 10, 16, 22, 28, 34, 40, 46, 52, 58, 60, 63, 69 }, averages = { 32, 56, 116, 180, 244, 304, 388, 488, 608, 756, 888, 932, 1060 }}
+		elseif isTBC then
 			hotData[Lifebloom] = {interval = 1, ticks = 7, coeff = 0.52, dhCoeff = 0.34335, levels = {64}, averages = {273}, bomb = {600}}
+		else
+			hotData[Lifebloom] = {interval = 1, ticks = 7, coeff = 7 * 0.051, dhCoeff = 0.274, levels = {60}, averages = generateSODAverages(38.949830, 0.04 * 7, 0.606705, 0.167780), bomb = generateSODAverages(38.949830, 0.57, 0.606705, 0.167780)}
+			hotData[WildGrowth] = {interval = 1, ticks = 7, coeff = 7 * 0.061,  levels = {60}, averages = generateSODAverages(38.949830, 0.34 * 7 , 0.606705, 0.167780)}
 		end
 		if isWrath then
 			spellData[HealingTouch] = { levels = {1, 8, 14, 20, 26, 32, 38, 44, 50, 56, 60, 62, 69, 74, 79}, averages = {
@@ -1030,7 +1041,11 @@ if( playerClass == "DRUID" ) then
 				end
 
 				local bombSpell = bombSpellPower * hotData[spellName].dhCoeff * (1 + talentData[EmpoweredRejuv].current)
-				bombAmount = ceil(calculateGeneralAmount(hotData[spellName].levels[spellRank], hotData[spellName].bomb[spellRank], bombSpell, spModifier, healModifier))
+				local bombBase = hotData[spellName].bomb[spellRank]
+				if type(bombBase) == "table" then
+					bombBase = bombBase[min(playerLevel, #bombBase)]
+				end
+				bombAmount = ceil(calculateGeneralAmount(hotData[spellName].levels[spellRank], bombBase, bombSpell, spModifier, healModifier))
 
 				-- Figure out the hot tick healing
 				spellPower = spellPower * (hotData[spellName].coeff * (1 + talentData[EmpoweredRejuv].current))
@@ -1201,12 +1216,13 @@ if( playerClass == "PALADIN" ) then
 		local HealingLight = GetSpellInfo(20237)
 		local HolyLight = GetSpellInfo(635)
 		local Divinity = GetSpellInfo(63646) or "Divinity"
-		local TouchedbytheLight = GetSpellInfo(53592) or "TouchedbytheLight"
-		local BeaconofLight = GetSpellInfo(53563) or "BeaconofLight"
-		local SealofLight = GetSpellInfo(20165) or "SealofLight"
-		local DivineIllumination = GetSpellInfo(31842) or "DivineIllumination"
+		local TouchedbytheLight = GetSpellInfo(53592) or "Touched by the Light"
+		local BeaconofLight = GetSpellInfo(53563) or "Beacon of Light"
+		local SealofLight = GetSpellInfo(20165) or "Seal of Light"
+		local DivineIllumination = GetSpellInfo(31842) or "Divine Illumination"
 		local DivinePlea = GetSpellInfo(54428)
 		local AvengingWrath = GetSpellInfo(31884)
+		local SacrificeRedeemed = GetSpellInfo(407805) or "Sacrifice Redeemed"
 
 		if isWrath then
 			spellData[HolyLight] = { coeff = 2.5 / 3.5, levels = {1, 6, 14, 22, 30, 38, 46, 54, 60, 62, 70, 75, 80}, averages = {
@@ -1326,6 +1342,10 @@ if( playerClass == "PALADIN" ) then
 
 			if( glyphCache[54943] and unitHasAura("player", SealofLight) ) then
 				healModifier = healModifier * 1.05
+			end
+
+			if(unitHasAura("player", SacrificeRedeemed)) then
+				healModifier = healModifier * 1.10
 			end
 
 			if isTBC or isWrath then
@@ -1456,8 +1476,13 @@ if( playerClass == "PRIEST" ) then
 			{avg(1042, 1338), avg(1043, 1340), avg(1045, 1342), avg(1047, 1344), avg(1049, 1346), avg(1051, 1348), avg(1053, 1350), avg(1055, 1352)},
 			{avg(1619, 2081), avg(1622, 2084), avg(1625, 2087), avg(1628, 2090), avg(1631, 2093)},
 			{avg(1952, 2508), avg(1955, 2512), avg(1959, 2516)} }}
-		spellData[Penance] = {_isChanneled = true, coeff = 0.857, ticks = 3, levels = {60, 70, 75, 80}, averages = {avg(670, 756), avg(805, 909), avg(1278, 1442), avg(1484, 1676)}}
 
+		if isWrath then
+			spellData[Penance] = {_isChanneled = true, coeff = 0.857, ticks = 3, levels = {60, 70, 75, 80}, averages = {avg(670, 756), avg(805, 909), avg(1278, 1442), avg(1484, 1676)}}
+		else
+			spellData[Penance] = {_isChanneled = true, coeff = 0.857, ticks = 3, levels = {60}, averages = generateSODAverages(38.258376, 1.06, 0.904195, 0.161311)}
+		end
+		
 		talentData[ImprovedRenew] = {mod = 0.05, current = 0}
 		talentData[SpiritualHealing] = {mod = 0.02, current = 0}
 		talentData[EmpoweredHealing] = {mod = 0.02, current = 0}
@@ -1606,7 +1631,7 @@ if( playerClass == "PRIEST" ) then
 				spellPower = spellPower * ((spellData[spellName].coeff * (isWrath and 1.88 or 1)) * (1 + talentData[EmpoweredHealing].current))
 				-- Penance
 			elseif( spellName == Penance ) then
-				spellPower = spellPower * (spellData[spellName].coeff * 1.88)
+				spellPower = spellPower * spellData[spellName].coeff * (isWrath and 1.88 or 1)
 				spellPower = spellPower / spellData[spellName].ticks
 				healModifier = healModifier + talentData[TwinDisciplines].current
 				-- Prayer of Healing
@@ -1658,9 +1683,11 @@ if( playerClass == "SHAMAN" ) then
 		local TidalWaves = GetSpellInfo(51566) or "Tidal Waves"
 		local Riptide = GetSpellInfo(61295) or "Riptide"
 		local Earthliving = GetSpellInfo(52000) or "Earthliving"
+		local HealingRain = GetSpellInfo(415236) or "Healing Rain"
 
-		hotData[Riptide] = {interval = 3, ticks = 5, coeff = 0.50, levels = {60, 70, 75, 80}, averages = {665, 885, 1435, 1670}}
-		hotData[Earthliving] = {interval = 3, ticks = 4, coeff = 0.80, levels = {30, 40, 50, 60, 70, 80}, averages = {116, 160, 220, 348, 456, 652}}
+		hotData[Riptide] = {interval = 3, ticks = 5, coeff = 5 * 0.188, levels = {60, 70, 75, 80}, averages = {665, 885, 1435, 1670}}
+		hotData[Earthliving] = {interval = 3, ticks = 4, coeff = 4 * 0.171, levels = {30, 40, 50, 60, 70, 80}, averages = {116, 160, 220, 348, 456, 652}}
+		hotData[HealingRain] = {interval = 1, ticks = 10, coeff = 10 * 0.063, levels = {60}, averages = generateSODAverages(29.888200, 0.15, 0.690312, 0.136267)}
 
 		spellData[ChainHeal] = {coeff = 2.5 / 3.5, levels = {40, 46, 54, 61, 68, 74, 80}, averages = {
 			{avg(320, 368), avg(322, 371), avg(325, 373), avg(327, 376), avg(330, 378), avg(332, 381)},
@@ -1735,43 +1762,42 @@ if( playerClass == "SHAMAN" ) then
 				else
 					return compressGUID[UnitGUID("player")], amount *  0.20
 				end
+			elseif( spellName == HealingRain ) then
+				-- Healing Rain can be casted on other groups than your own
+				local targets = compressGUID[guid]
+				local group = guidToGroup[guid]
+	
+				for groupGUID, id in pairs(guidToGroup) do
+					--We skip the rangecheck since range would have to be measured from our target to its party and we can't do that
+					local testUnit = guidToUnit[groupGUID]
+					if( id == group and guid ~= groupGUID and UnitIsVisible(testUnit) and not UnitHasVehicleUI(testUnit) ) then
+						targets = targets .. "," .. compressGUID[groupGUID]
+					end
+				end
+				return targets
 			end
-		
-			return compressGUID[guid]
-		end
 
 		CalculateHotHealing = function(guid, spellID)
 			local spellName, spellRank = GetSpellInfo(spellID), SpellIDToRank[spellID]
 			local healAmount = getBaseHealAmount(hotData, spellName, spellID, spellRank)
 			local spellPower = GetSpellBonusHealing()
 			local healModifier, spModifier = playerHealModifier, 1
-			local totalTicks
+			local totalTicks = hotData[spellName].ticks
 	
 			healModifier = healModifier * (1 + talentData[Purification].current)
-			
+
 			-- Riptide
 			if( spellName == Riptide ) then
 				if( equippedSetCache["T9 Resto"] >= 2 ) then
 					spModifier = spModifier * 1.20
 				end
-				
-				spellPower = spellPower * (hotData[spellName].coeff * 1.88)
-				spellPower = spellPower / hotData[spellName].ticks
-				healAmount = healAmount / hotData[spellName].ticks
-				
-				totalTicks = hotData[spellName].ticks
 				-- Glyph of Riptide, +6 seconds
-				if( glyphCache[63273] ) then totalTicks = totalTicks + 2 end
-				
-			-- Earthliving Weapon
-			elseif( spellName == Earthliving ) then
-				spellPower = (spellPower * (hotData[spellName].coeff * 1.88) * 0.45)
-				spellPower = spellPower / hotData[spellName].ticks
-				healAmount = healAmount / hotData[spellName].ticks
-				
-				totalTicks = hotData[spellName].ticks
+				if( glyphCache[63273] ) then totalTicks = totalTicks + 2 end	
 			end
-			
+			spellPower = spellPower * hotData[spellName].coeff
+			spellPower = spellPower / hotData[spellName].ticks
+			healAmount = healAmount / hotData[spellName].ticks
+		
 			healAmount = calculateGeneralAmount(hotData[spellName].levels[spellRank], healAmount, spellPower, spModifier, healModifier)
 			return HOT_HEALS, healAmount, totalTicks, hotData[spellName].interval
 		end
@@ -1890,6 +1916,54 @@ if( playerClass == "HUNTER" ) then
 			if( equippedSetCache["Giantstalker"] >= 3 ) then healAmount = healAmount * 1.1 end
 
 			return CHANNEL_HEALS, ceil(healAmount / spellData[spellName].ticks), spellData[spellName].ticks, spellData[spellName].interval
+		end
+	end
+end
+
+if( playerClass == "MAGE" ) then
+	LoadClassData = function()
+		local MassRegeneration = GetSpellInfo(412510) or "Mass Regeneration"
+		local Regeneration = GetSpellInfo(401417) or "Regeneration"
+
+		spellData[MassRegeneration] = {_isChanneled = true, coeff = 0.081 * 3, interval = 1,  ticks = 3, levels = {60}, averages = generateSODAverages(38.258376, 0.54, 0.904195, 0.161311) }
+		spellData[Regeneration] = {_isChanneled = true, coeff = 0.243 * 3 , interval = 1, ticks = 3, levels = {60} , averages = generateSODAverages(38.258376,  1.0, 0.018012, 0.044141)}
+
+		GetHealTargets = function(bitType, guid, spellID)
+			local spellName = GetSpellInfo(spellID)
+			if( spellName == MassRegeneration ) then
+				-- Mass Regeneration can be casted on other groups than your own
+				local targets = compressGUID[guid]
+				local group = guidToGroup[guid]
+
+				for groupGUID, id in pairs(guidToGroup) do
+					--We skip the rangecheck since range would have to be measured from our target to its party and we can't do that
+					local testUnit = guidToUnit[groupGUID]
+					if( id == group and guid ~= groupGUID and UnitIsVisible(testUnit) and not UnitHasVehicleUI(testUnit) ) then
+						targets = targets .. "," .. compressGUID[groupGUID]
+					end
+				end
+				return targets
+			end
+		end
+
+		CalculateHealing = function(guid, spellID)
+			local spellName, spellRank = GetSpellInfo(spellID), SpellIDToRank[spellID]
+			if not spellRank then return end
+
+			local healAmount = getBaseHealAmount(spellData, spellName, spellID, spellRank)
+			local spellPower = GetSpellBonusHealing()
+			local healModifier, spModifier = playerHealModifier, 1
+
+			spellPower = spellPower * spellData[spellName].coeff
+			spellPower = spellPower / spellData[spellName].ticks
+
+			healAmount = calculateGeneralAmount(spellData[spellName].levels[spellRank], healAmount, spellPower, spModifier, healModifier)
+
+			if( spellName == MassRegeneration or spellName == Regeneration ) then
+				return CHANNEL_HEALS, math.ceil(healAmount), spellData[spellName].ticks, spellData[spellName].interval
+			end
+
+			return DIRECT_HEALS, ceil(healAmount)
 		end
 	end
 end
@@ -2457,7 +2531,7 @@ local function parseHotBomb(casterGUID, wasUpdated, spellID, amount, ...)
 	pending.endTime = hotPending.endTime
 	pending.spellID = spellID
 	pending.bitType = BOMB_HEALS
-	pending.stack = isWrath and hotPending.stack or 1 -- TBC Lifebloom bomb heal does not stack
+	pending.stack = not isTBC and hotPending.stack or 1 -- TBC Lifebloom bomb heal does not stack
 
 	loadHealList(pending, amount, pending.stack, pending.endTime, nil, ...)
 
@@ -2811,6 +2885,7 @@ local penanceIDs = {
 	[53005] = 52986,
 	[53006] = 52987,
 	[53007] = 52988,
+	[402174] = 402277,
 }
 -- When the game tries to figure out the UnitID from the name it will prioritize players over non-players
 -- if there are conflicts in names it will pull the one with the least amount of current health
@@ -2886,11 +2961,11 @@ function HealComm:UNIT_SPELLCAST_START(unit, cast, spellID)
 		sendMessage(format("D:%.3f:%d:%d:%s", (endTime - startTime) / 1000, spellID or 0, amount or "", targets))
 	elseif( bitType == CHANNEL_HEALS ) then
 		parseChannelHeal(playerGUID, spellID, amount, ticks, string.split(",", targets))
-		if spellName == GetSpellInfo(740) or spellName == GetSpellInfo(746) then
-			sendMessage(string.format("C::%d:%d:%s:%s", spellID, amount, ticks, targets))
-		else
+		if spellName == "Penance" then
 			-- Penance has its first tick already done by the time this arrives
 			sendMessage(string.format("C::%d:%d:%s:%s", spellID, amount, ticks - 1, targets))
+		else
+			sendMessage(string.format("C::%d:%d:%s:%s", spellID, amount, ticks, targets))
 		end
 	end
 end
@@ -2943,11 +3018,8 @@ function HealComm:UNIT_SPELLCAST_CHANNEL_STOP(unit, _, spellID)
 	local spellName = GetSpellInfo(spellID)
 	if( unit ~= "player" or not spellData[spellName] ) then return end
 
-	-- End heal if a Penance cast is stopped prematurely (e.g. by movement)
-	if( spellName == "Penance" ) then
-		parseHealEnd(playerGUID, nil, "name", spellID, true)
-		sendMessage(format("S::%d:1", spellID or 0))
-	end
+	parseHealEnd(playerGUID, nil, "name", spellID, true)
+	sendMessage(format("S::%d:1", spellID or 0))
 end
 
 -- Cast didn't go through, recheck any charge data if necessary
