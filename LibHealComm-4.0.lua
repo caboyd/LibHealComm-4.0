@@ -744,6 +744,9 @@ end
 -- Any other modifiers such as Mortal Strike or Avenging Wrath are applied after everything else
 
 local function calculateGeneralAmount(level, amount, spellPower, spModifier, healModifier)
+	--SOD runes have no spell level
+	level = level or playerLevel
+
 	local penalty = level > 20 and 1 or (1 - ((20 - level) * 0.0375))
 	if isWrath then
 		--https://wowwiki-archive.fandom.com/wiki/Downranking
@@ -815,7 +818,7 @@ local function getBaseHealAmount(spellData, spellName, spellID, spellRank)
 	if type(average) == "number" then
 		return average
 	end
-	local requiresLevel = spellData.levels[spellRank]
+	local requiresLevel = spellData.levels[spellRank] or 1
 	return average[min(playerLevel - requiresLevel + 1, #average)]
 end
 
@@ -855,8 +858,8 @@ if( playerClass == "DRUID" ) then
 		elseif isTBC then
 			hotData[Lifebloom] = {interval = 1, ticks = 7, coeff = 0.52, dhCoeff = 0.34335, levels = {64}, averages = {273}, bomb = {600}}
 		else
-			hotData[Lifebloom] = {interval = 1, ticks = 7, coeff = 7 * 0.051, dhCoeff = 0.274, levels = {60}, averages = generateSODAverages(38.949830, 0.04 * 7, 0.606705, 0.167780), bomb = generateSODAverages(38.949830, 0.57, 0.606705, 0.167780)}
-			hotData[WildGrowth] = {interval = 1, ticks = 7, coeff = 7 * 0.061,  levels = {60}, averages = generateSODAverages(38.949830, 0.34 * 7 , 0.606705, 0.167780)}
+			hotData[Lifebloom] = {interval = 1, ticks = 7, coeff = 7 * 0.051, dhCoeff = 0.274, levels = {nil} ,averages = generateSODAverages(38.949830, 0.04 * 7, 0.606705, 0.167780), bomb = generateSODAverages(38.949830, 0.57, 0.606705, 0.167780)}
+			hotData[WildGrowth] = {interval = 1, ticks = 7, coeff = 7 * 0.061, levels = {nil}, averages = generateSODAverages(38.949830, 0.34 * 7 , 0.606705, 0.167780)}
 		end
 		if isWrath then
 			spellData[HealingTouch] = { levels = {1, 8, 14, 20, 26, 32, 38, 44, 50, 56, 60, 62, 69, 74, 79}, averages = {
@@ -1480,7 +1483,7 @@ if( playerClass == "PRIEST" ) then
 		if isWrath then
 			spellData[Penance] = {_isChanneled = true, coeff = 0.857, ticks = 3, levels = {60, 70, 75, 80}, averages = {avg(670, 756), avg(805, 909), avg(1278, 1442), avg(1484, 1676)}}
 		else
-			spellData[Penance] = {_isChanneled = true, coeff = 0.857, ticks = 3, levels = {60}, averages = generateSODAverages(38.258376, 1.06, 0.904195, 0.161311)}
+			spellData[Penance] = {_isChanneled = true, coeff = 0.857, ticks = 3, levels = {nil}, averages = generateSODAverages(38.258376, 1.06, 0.904195, 0.161311)}
 		end
 		
 		talentData[ImprovedRenew] = {mod = 0.05, current = 0}
@@ -1687,7 +1690,7 @@ if( playerClass == "SHAMAN" ) then
 
 		hotData[Riptide] = {interval = 3, ticks = 5, coeff = 5 * 0.188, levels = {60, 70, 75, 80}, averages = {665, 885, 1435, 1670}}
 		hotData[Earthliving] = {interval = 3, ticks = 4, coeff = 4 * 0.171, levels = {30, 40, 50, 60, 70, 80}, averages = {116, 160, 220, 348, 456, 652}}
-		hotData[HealingRain] = {interval = 1, ticks = 10, coeff = 10 * 0.063, levels = {60}, averages = generateSODAverages(29.888200, 0.15, 0.690312, 0.136267)}
+		hotData[HealingRain] = {interval = 1, ticks = 10, coeff = 10 * 0.063, levels = {nil}, averages = generateSODAverages(29.888200, 0.15, 0.690312, 0.136267)}
 
 		spellData[ChainHeal] = {coeff = 2.5 / 3.5, levels = {40, 46, 54, 61, 68, 74, 80}, averages = {
 			{avg(320, 368), avg(322, 371), avg(325, 373), avg(327, 376), avg(330, 378), avg(332, 381)},
@@ -1927,8 +1930,8 @@ if( playerClass == "MAGE" ) then
 		local MassRegeneration = GetSpellInfo(412510) or "Mass Regeneration"
 		local Regeneration = GetSpellInfo(401417) or "Regeneration"
 
-		spellData[MassRegeneration] = {_isChanneled = true, coeff = 0.081 * 3, interval = 1,  ticks = 3, levels = {60}, averages = generateSODAverages(38.258376, 0.54, 0.904195, 0.161311) }
-		spellData[Regeneration] = {_isChanneled = true, coeff = 0.243 * 3 , interval = 1, ticks = 3, levels = {60} , averages = generateSODAverages(38.258376,  1.0, 0.018012, 0.044141)}
+		spellData[MassRegeneration] = {_isChanneled = true, coeff = 0.081 * 3, interval = 1,  ticks = 3, levels = {nil}, averages = generateSODAverages(38.258376, 0.54, 0.904195, 0.161311) }
+		spellData[Regeneration] = {_isChanneled = true, coeff = 0.243 * 3 , interval = 1, ticks = 3, levels = {nil}, averages = generateSODAverages(38.258376,  1.0, 0.018012, 0.044141)}
 
 		GetHealTargets = function(bitType, guid, spellID)
 			local spellName = GetSpellInfo(spellID)
