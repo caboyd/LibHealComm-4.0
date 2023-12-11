@@ -1776,6 +1776,8 @@ if( playerClass == "SHAMAN" ) then
 				end
 				return targets
 			end
+			return compressGUID[guid]
+		end
 
 		CalculateHotHealing = function(guid, spellID)
 			local spellName, spellRank = GetSpellInfo(spellID), SpellIDToRank[spellID]
