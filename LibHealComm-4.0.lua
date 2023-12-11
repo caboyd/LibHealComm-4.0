@@ -744,6 +744,8 @@ end
 -- Any other modifiers such as Mortal Strike or Avenging Wrath are applied after everything else
 
 local function calculateGeneralAmount(level, amount, spellPower, spModifier, healModifier)
+	--New SOD Runes will have no spell level unless supported in this addon.
+	if(not level) then return 0 end
 	local penalty = level > 20 and 1 or (1 - ((20 - level) * 0.0375))
 	if isWrath then
 		--https://wowwiki-archive.fandom.com/wiki/Downranking
@@ -806,6 +808,9 @@ end
 local CalculateHealing, GetHealTargets, AuraHandler, CalculateHotHealing, ResetChargeData, LoadClassData
 
 local function getBaseHealAmount(spellData, spellName, spellID, spellRank)
+	--New SOD Runes will have no spellrank unless supported in this addon.
+	if(not spellRank) then return 0 end
+
 	if spellID == 37563 then
 		spellData = spellData["37563"]
 	else
@@ -1201,10 +1206,10 @@ if( playerClass == "PALADIN" ) then
 		local HealingLight = GetSpellInfo(20237)
 		local HolyLight = GetSpellInfo(635)
 		local Divinity = GetSpellInfo(63646) or "Divinity"
-		local TouchedbytheLight = GetSpellInfo(53592) or "TouchedbytheLight"
-		local BeaconofLight = GetSpellInfo(53563) or "BeaconofLight"
-		local SealofLight = GetSpellInfo(20165) or "SealofLight"
-		local DivineIllumination = GetSpellInfo(31842) or "DivineIllumination"
+		local TouchedbytheLight = GetSpellInfo(53592) or "Touched by the Light"
+		local BeaconofLight = GetSpellInfo(53563) or "Beacon of Light"
+		local SealofLight = GetSpellInfo(20165) or "Seal of Light"
+		local DivineIllumination = GetSpellInfo(31842) or "Divine Illumination"
 		local DivinePlea = GetSpellInfo(54428)
 		local AvengingWrath = GetSpellInfo(31884)
 
@@ -1494,7 +1499,7 @@ if( playerClass == "PRIEST" ) then
 					return format("%s,%s", compressGUID[guid], compressGUID[playerGUID])
 				end
 			elseif( spellName == PrayerofHealing ) then
-				-- In Wrath PoH can be castet on other groups than your own
+				-- In Wrath PoH can be casted on other groups than your own
 				if not isWrath then
 					guid = UnitGUID("player")
 				end
