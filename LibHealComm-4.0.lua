@@ -3118,12 +3118,14 @@ end
 -- Spell was cast somehow
 function HealComm:CastSpell(arg, unit)
 
-	-- Fixes prediction for spells cast by macro
-	if not tonumber(arg) then
+	--Set lastSentID so macro heals work
+	if tonumber(arg) then
+		lastSentID = arg
+	else
 		local _, _, _, _, _, _, spellID = GetSpellInfo(arg)
 		lastSentID = spellID
-		guidPriorities[spellID] = 0
 	end
+	guidPriorities[lastSentID] = nil
 	
 
 	-- If the spell is waiting for a target and it's a spell action button then we know that the GUID has to be mouseover or a key binding cast.
