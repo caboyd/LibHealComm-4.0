@@ -89,7 +89,7 @@ local isClassicEra = build == 1
 local isSoD = HasActiveSeason() and GetActiveSeason() == (Enum.SeasonID.SeasonOfDiscovery or Enum.SeasonID.Placeholder) and isClassicEra
 
 local spellRankTableData = {
-	[1] = { 774, 8936, 5185, 740, 635, 19750, 139, 2060, 596, 2061, 2054, 2050, 1064, 331, 8004, 136, 755, 689, 746, 33763, 32546, 37563, 48438, 61295, 51945, 50464, 47757, 408120, 408124, 402277, 415236, 412510, 401417 },
+	[1] = { 774, 8936, 5185, 740, 635, 19750, 139, 2060, 596, 2061, 2054, 2050, 1064, 331, 8004, 136, 755, 689, 746, 33763, 32546, 37563, 48438, 61295, 51945, 50464, 47757, 408120, 408124, 402277, 412510, 401417 },
 	[2] = { 1058, 8938, 5186, 8918, 639, 19939, 6074, 10963, 996, 9472, 2055, 2052, 10622, 332, 8008, 3111, 3698, 699, 1159, 53248, 61299, 51990, 48450, 52986, 48119 },
 	[3] = { 1430, 8939, 5187, 9862, 647, 19940, 6075, 10964, 10960, 9473, 6063, 2053, 10623, 547, 8010, 3661, 3699, 709, 3267, 53249, 61300, 51997, 48451, 52987, 48120 },
 	[4] = { 2090, 8940, 5188, 9863, 1026, 19941, 6076, 10965, 10961, 9474, 6064, 913, 10466, 3662, 3700, 7651, 3268, 25422, 53251, 61301, 51998, 52988 },
@@ -1697,14 +1697,9 @@ if( playerClass == "SHAMAN" ) then
 		local TidalWaves = GetSpellInfo(51566) or "Tidal Waves"
 		local Riptide = GetSpellInfo(61295) or "Riptide"
 		local Earthliving = GetSpellInfo(52000) or "Earthliving"
-		local HealingRain = GetSpellInfo(415236) or "Healing Rain"
 
 		hotData[Riptide] = {interval = 3, ticks = 5, coeff = 0.50, levels = {60, 70, 75, 80}, averages = {665, 885, 1435, 1670}}
-		hotData[Earthliving] = {interval = 3, ticks = 4, coeff = 0.364, levels = {30, 40, 50, 60, 70, 80}, averages = {116, 160, 220, 348, 456, 652}}
-
-		if isSoD then
-			hotData[HealingRain] = {interval = 1, ticks = 10, coeff = 10 * 0.063, levels = {nil}, averages = generateSODAverages(29.888200, 0.15, 0.690312, 0.136267)}
-		end
+		hotData[Earthliving] = {interval = 3, ticks = 4, coeff = 0.80, levels = {30, 40, 50, 60, 70, 80}, averages = {116, 160, 220, 348, 456, 652}}
 
 		spellData[ChainHeal] = {coeff = 2.5 / 3.5, levels = {40, 46, 54, 61, 68, 74, 80}, averages = {
 			{avg(320, 368), avg(322, 371), avg(325, 373), avg(327, 376), avg(330, 378), avg(332, 381)},
@@ -1779,19 +1774,6 @@ if( playerClass == "SHAMAN" ) then
 				else
 					return compressGUID[UnitGUID("player")], amount *  0.20
 				end
-			elseif( isSoD and spellName == HealingRain ) then
-				-- Healing Rain can be casted on other groups than your own
-				local targets = compressGUID[guid]
-				local group = guidToGroup[guid]
-	
-				for groupGUID, id in pairs(guidToGroup) do
-					--We skip the rangecheck since range would have to be measured from our target to its party and we can't do that
-					local testUnit = guidToUnit[groupGUID]
-					if( id == group and guid ~= groupGUID and UnitIsVisible(testUnit) and not UnitHasVehicleUI(testUnit) ) then
-						targets = targets .. "," .. compressGUID[groupGUID]
-					end
-				end
-				return targets
 			end
 		
 			return compressGUID[guid]
@@ -1802,22 +1784,33 @@ if( playerClass == "SHAMAN" ) then
 			local healAmount = getBaseHealAmount(hotData, spellName, spellID, spellRank)
 			local spellPower = GetSpellBonusHealing()
 			local healModifier, spModifier = playerHealModifier, 1
-			local totalTicks = hotData[spellName].ticks
+			local totalTicks
 	
 			healModifier = healModifier * (1 + talentData[Purification].current)
-
+			
 			-- Riptide
 			if( spellName == Riptide ) then
 				if( equippedSetCache["T9 Resto"] >= 2 ) then
 					spModifier = spModifier * 1.20
 				end
+				
+				spellPower = spellPower * (hotData[spellName].coeff * 1.88)
+				spellPower = spellPower / hotData[spellName].ticks
+				healAmount = healAmount / hotData[spellName].ticks
+				
+				totalTicks = hotData[spellName].ticks
 				-- Glyph of Riptide, +6 seconds
-				if( glyphCache[63273] ) then totalTicks = totalTicks + 2 end	
+				if( glyphCache[63273] ) then totalTicks = totalTicks + 2 end
+				
+			-- Earthliving Weapon
+			elseif( spellName == Earthliving ) then
+				spellPower = (spellPower * (hotData[spellName].coeff * 1.88) * 0.45)
+				spellPower = spellPower / hotData[spellName].ticks
+				healAmount = healAmount / hotData[spellName].ticks
+				
+				totalTicks = hotData[spellName].ticks
 			end
-			spellPower = spellPower * hotData[spellName].coeff * (isWrath and 1.88 or 1)
-			spellPower = spellPower / hotData[spellName].ticks
-			healAmount = healAmount / hotData[spellName].ticks
-		
+			
 			healAmount = calculateGeneralAmount(hotData[spellName].levels[spellRank], healAmount, spellPower, spModifier, healModifier)
 			return HOT_HEALS, healAmount, totalTicks, hotData[spellName].interval
 		end
