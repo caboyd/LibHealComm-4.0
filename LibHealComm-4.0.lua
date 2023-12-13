@@ -2822,31 +2822,40 @@ end)
 HealComm.blizzardPredictionFrame = HealComm.blizzardPredictionFrame or CreateFrame("Frame")
 HealComm.blizzardPredictionFrame:Show()
 local BLIZZARD_PREDICTION_UPDATE_RATE = 0.1
-
+local time_since
 HealComm.blizzardPredictionFrame:SetScript("OnUpdate", function(self, elapsed)
-	local time_elapsed = (time_elapsed or 0) - elapsed
-	if(time_elapsed > 0) then return end
-	time_elapsed = BLIZZARD_PREDICTION_UPDATE_RATE
+	time_since = (time_since or 0) - elapsed
+	if(time_since > 0) then return end
+	time_since = BLIZZARD_PREDICTION_UPDATE_RATE
 
-	wipe(tempPlayerList)
+	wipe(tempPlayerList)	
+	pendingHeals[playerGUID] = pendingHeals[playerGUID] or {}
+	pendingHeals[playerGUID]["heal"]  = pendingHeals[playerGUID]["heal"] or  {}
+	pendingHeals["other"] = pendingHeals["other"] or {}
+	pendingHeals["other"]["heal"]  = pendingHeals["other"]["heal"] or  {}
+	local myPending = pendingHeals[playerGUID]["heal"]
+	wipe(myPending)
+	myPending.endTime = 0
+	myPending.spellID = 0
+	myPending.bitType = DIRECT_HEALS
+	local otherPending = pendingHeals["other"]["heal"]
+	wipe(otherPending)
+	otherPending.endTime = 0
+	otherPending.spellID = 0
+	otherPending.bitType = DIRECT_HEALS
+
 	for guid, unit in pairs(guidToUnit) do
 		local myHeal = UnitGetIncomingHeals(unit, "player") or 0
-		local otherHeal = (UnitGetIncomingHeals(unit) or 0) - myHeal
-		pendingHeals[playerGUID] = pendingHeals[playerGUID] or {}
-		pendingHeals[playerGUID]["heal"]  = pendingHeals[playerGUID]["heal"] or  {}
-		local myPending = pendingHeals[playerGUID]["heal"]
-		myPending.endTime = 0
-		myPending.spellID = 0
-		myPending.bitType = DIRECT_HEALS
-		updateRecord(myPending,guid,myHeal,1,0,0)
-		pendingHeals["other"] = pendingHeals["other"] or {}
-		pendingHeals["other"]["heal"]  = pendingHeals["other"]["heal"] or  {}
-		local otherPending = pendingHeals["other"]["heal"]
-		otherPending.endTime = 0
-		otherPending.spellID = 0
-		otherPending.bitType = DIRECT_HEALS
-		updateRecord(otherPending,guid,otherHeal,1,0,0)
-		tinsert(tempPlayerList, guid)
+		local otherHeal = max(0,(UnitGetIncomingHeals(unit) or 0) - myHeal)
+		if(myHeal > 0) then	
+			updateRecord(myPending,guid,myHeal,1,0,0) 
+		end
+		if(otherHeal > 0) then
+			updateRecord(otherPending,guid,otherHeal,1,0,0) 
+		end
+		if(myHeal > 0 or otherHeal > 0 ) then
+			tinsert(tempPlayerList, guid)
+		end
 	end
 	if(select('#',tempPlayerList)) then
 		HealComm.callbacks:Fire("HealComm_HealUpdated", UnitGUID("player"), 0, DIRECT_HEALS, 0, unpack(tempPlayerList))
