@@ -89,7 +89,7 @@ local isClassicEra = build == 1
 local isSoD = HasActiveSeason() and GetActiveSeason() == (Enum.SeasonID.SeasonOfDiscovery or Enum.SeasonID.Placeholder) and isClassicEra
 
 local spellRankTableData = {
-	[1] = { 774, 8936, 5185, 740, 635, 19750, 139, 2060, 596, 2061, 2054, 2050, 1064, 331, 8004, 136, 755, 689, 746, 33763, 32546, 37563, 48438, 61295, 51945, 50464, 47757, 408120, 408124, 402277, 415236, 412510, 401417 },
+	[1] = { 774, 8936, 5185, 740, 635, 19750, 139, 2060, 596, 2061, 2054, 2050, 1064, 331, 8004, 136, 755, 689, 746, 33763, 32546, 37563, 48438, 61295, 51945, 50464, 47757, 408120, 408124, 402277, 415236, 415240, 412510, 401417 },
 	[2] = { 1058, 8938, 5186, 8918, 639, 19939, 6074, 10963, 996, 9472, 2055, 2052, 10622, 332, 8008, 3111, 3698, 699, 1159, 53248, 61299, 51990, 48450, 52986, 48119 },
 	[3] = { 1430, 8939, 5187, 9862, 647, 19940, 6075, 10964, 10960, 9473, 6063, 2053, 10623, 547, 8010, 3661, 3699, 709, 3267, 53249, 61300, 51997, 48451, 52987, 48120 },
 	[4] = { 2090, 8940, 5188, 9863, 1026, 19941, 6076, 10965, 10961, 9474, 6064, 913, 10466, 3662, 3700, 7651, 3268, 25422, 53251, 61301, 51998, 52988 },
@@ -1685,6 +1685,9 @@ if( playerClass == "PRIEST" ) then
 	end
 end
 
+-- Keep track of current cast targer of Healing Rain
+local healingRainTargetGUID
+
 if( playerClass == "SHAMAN" ) then
 	LoadClassData = function()
 		local ChainHeal = GetSpellInfo(1064)
@@ -1780,18 +1783,8 @@ if( playerClass == "SHAMAN" ) then
 					return compressGUID[UnitGUID("player")], amount *  0.20
 				end
 			elseif( isSoD and spellName == HealingRain ) then
-				-- Healing Rain can be casted on other groups than your own
-				local targets = compressGUID[guid]
-				local group = guidToGroup[guid]
-	
-				for groupGUID, id in pairs(guidToGroup) do
-					--We skip the rangecheck since range would have to be measured from our target to its party and we can't do that
-					local testUnit = guidToUnit[groupGUID]
-					if( id == group and guid ~= groupGUID and UnitIsVisible(testUnit) and not UnitHasVehicleUI(testUnit) ) then
-						targets = targets .. "," .. compressGUID[groupGUID]
-					end
-				end
-				return targets
+				-- Healing Rain can only be applied to party members of healing rain target
+				if(guidToGroup[healingRainTargetGUID] ~= guidToGroup[guid]) then return nil	end
 			end
 		
 			return compressGUID[guid]
@@ -1819,6 +1812,14 @@ if( playerClass == "SHAMAN" ) then
 			healAmount = healAmount / hotData[spellName].ticks
 		
 			healAmount = calculateGeneralAmount(hotData[spellName].levels[spellRank], healAmount, spellPower, spModifier, healModifier)
+			
+			if(isSoD and spellName == HealingRain) then
+				--HoT duration is equal to remaining duration of aura
+				local  _,_,count,_,_,expiration = unitHasAura("player", HealingRain)
+				local ticksLeft = ceil(expiration - GetTime());
+				totalTicks = ticksLeft
+			end
+			
 			return HOT_HEALS, healAmount, totalTicks, hotData[spellName].interval
 		end
 
@@ -2867,6 +2868,10 @@ function HealComm:COMBAT_LOG_EVENT_UNFILTERED(...)
 			-- Hot faded that we cast
 			local pending = pendingHots[playerGUID] and pendingHots[playerGUID][spellName]
 			if hotData[spellName] then
+				--Healing Rain aura affects all targets even if they do not receive the heal
+				--Do not send message unless they are in same group
+				if(isSoD and spellName == "Healing Rain" and guidToGroup[healingRainTargetGUID] ~= guidToGroup[destGUID]) then return end
+
 				parseHealEnd(sourceGUID, pending, "id", spellID, false, compressGUID[destGUID])
 				sendMessage(format("HS::%d::%s", spellID, compressGUID[destGUID]))
 			elseif spellData[spellName] and spellData[spellName]._isChanneled then
@@ -2954,6 +2959,9 @@ function HealComm:UNIT_SPELLCAST_START(unit, cast, spellID)
 
 	local spellName = GetSpellInfo(spellID)
 	
+	--Save target of healing rain cast	
+	if(isSoD and spellName == "Healing Rain") then	healingRainTargetGUID = castGUIDs[spellID] end	
+
 	if (not spellData[spellName] or UnitIsCharmed("player") or not UnitPlayerControlled("player") ) then return end
 
 	local castGUID = castGUIDs[spellID]
