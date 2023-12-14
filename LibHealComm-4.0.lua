@@ -147,6 +147,7 @@ HealComm.spellData = HealComm.spellData or {}
 HealComm.talentData = HealComm.talentData or {}
 HealComm.tempPlayerList = HealComm.tempPlayerList or {}
 HealComm.glyphCache = HealComm.glyphCache or {}
+HealComm.lastHeals = HealComm.lastHeals or {}
 
 if( not HealComm.unitToPet ) then
 	HealComm.unitToPet = {["player"] = "pet"}
@@ -157,6 +158,7 @@ end
 local spellData, hotData, tempPlayerList, pendingHeals, pendingHots = HealComm.spellData, HealComm.hotData, HealComm.tempPlayerList, HealComm.pendingHeals, HealComm.pendingHots
 local equippedSetCache, itemSetsData, talentData = HealComm.equippedSetCache, HealComm.itemSetsData, HealComm.talentData
 local activeHots, activePets = HealComm.activeHots, HealComm.activePets
+local lastHeals = HealComm.lastHeals
 
 -- Figure out what they are now since a few things change based off of this
 local playerClass = select(2, UnitClass("player"))
@@ -2720,7 +2722,7 @@ function HealComm:CHAT_MSG_ADDON(prefix, message, channel, sender)
 
 	-- New direct heal - D:<extra>:<spellID>:<amount>:target1,target2...
 	if( commType == "D" and arg1 and arg2 ) then
-		--Parsing disabled because using Blizzard UnitGetIncomingHeals API
+		--Parsing disabled because using Blizzard UnitGetIncomingHeals API for others heals
 		--parseDirectHeal(casterGUID, spellID, tonumber(arg1), tonumber(extraArg), strsplit(",", arg2))
 		-- New channel heal - C:<extra>:<spellID>:<amount>:<totalTicks>:target1,target2...
 	elseif( commType == "C" and arg1 and arg3 ) then
@@ -2828,38 +2830,47 @@ HealComm.blizzardPredictionFrame:SetScript("OnUpdate", function(self, elapsed)
 	if(time_since > 0) then return end
 	time_since = BLIZZARD_PREDICTION_UPDATE_RATE
 
-	wipe(tempPlayerList)	
-	pendingHeals[playerGUID] = pendingHeals[playerGUID] or {}
-	pendingHeals[playerGUID]["heal"]  = pendingHeals[playerGUID]["heal"] or  {}
+	wipe(tempPlayerList)
 	pendingHeals["other"] = pendingHeals["other"] or {}
 	pendingHeals["other"]["heal"]  = pendingHeals["other"]["heal"] or  {}
-	local myPending = pendingHeals[playerGUID]["heal"]
-	wipe(myPending)
-	myPending.endTime = 0
-	myPending.spellID = 0
-	myPending.bitType = DIRECT_HEALS
 	local otherPending = pendingHeals["other"]["heal"]
 	wipe(otherPending)
 	otherPending.endTime = 0
 	otherPending.spellID = 0
 	otherPending.bitType = DIRECT_HEALS
 
+	local tempHealStarted = {}
+	local tempHealStopped = {}
+
 	for guid, unit in pairs(guidToUnit) do
 		local myHeal = UnitGetIncomingHeals(unit, "player") or 0
 		local otherHeal = max(0,(UnitGetIncomingHeals(unit) or 0) - myHeal)
-		if(myHeal > 0) then	
-			updateRecord(myPending,guid,myHeal,1,0,0) 
-		end
-		if(otherHeal > 0) then
-			updateRecord(otherPending,guid,otherHeal,1,0,0) 
-		end
-		if(myHeal > 0 or otherHeal > 0 ) then
-			tinsert(tempPlayerList, guid)
+
+		if(otherHeal ~= lastHeals[guid])then
+			if(otherHeal > 0) then
+				updateRecord(otherPending,guid,otherHeal,1,0,0)
+			else
+				removeRecord(otherPending, guid)
+			end
+			if(otherHeal > (lastHeals[guid] or 0)) then
+				tinsert(tempHealStarted, guid)
+			else
+				tinsert(tempHealStopped, guid)
+			end
+			lastHeals[guid] = otherHeal
 		end
 	end
-	if(select('#',tempPlayerList)) then
-		HealComm.callbacks:Fire("HealComm_HealUpdated", UnitGUID("player"), 0, DIRECT_HEALS, 0, unpack(tempPlayerList))
+
+	if(#tempHealStarted > 0 ) then
+		HealComm.callbacks:Fire("HealComm_HealStarted", UnitGUID("player"), 0, DIRECT_HEALS, nil, unpack(tempHealStarted))
 	end
+	if(#tempHealStopped > 0 ) then
+		HealComm.callbacks:Fire("HealComm_HealUpdated", UnitGUID("player"), 0, DIRECT_HEALS, nil, unpack(tempHealStopped))
+	end
+
+	wipe(tempHealStarted)
+	wipe(tempHealStopped)
+
 end)
 
 -- Monitor aura changes as well as new hots being cast
@@ -3089,8 +3100,7 @@ function HealComm:UNIT_SPELLCAST_START(unit, cast, spellID)
 
 	if( bitType == DIRECT_HEALS ) then
 		local startTime, endTime = select(4, CastingInfo())
-		--Parsing disabled because using Blizzard UnitGetIncomingHeals API
-		--parseDirectHeal(playerGUID, spellID, amount, (endTime - startTime) / 1000, strsplit(",", targets))
+		parseDirectHeal(playerGUID, spellID, amount, (endTime - startTime) / 1000, strsplit(",", targets))
 		sendMessage(format("D:%.3f:%d:%d:%s", (endTime - startTime) / 1000, spellID or 0, amount or "", targets))
 	elseif( bitType == CHANNEL_HEALS ) then
 		parseChannelHeal(playerGUID, spellID, amount, ticks, string.split(",", targets))
@@ -3317,6 +3327,7 @@ local function sanityCheckMapping()
 
 			pendingHeals[guid] = nil
 			pendingHots[guid] = nil
+			lastHeals[guid] = nil
 
 			-- Remove any heals that are on them
 			removeAllRecords(guid)
