@@ -988,7 +988,12 @@ if( playerClass == "DRUID" ) then
 				{205 * 5, 206 * 5, 207 * 5, 208 * 5, 209 * 5, 210 * 5, 211 * 5},
 				{294 * 5} }}
 		end
-		spellData[Nourish] = {coeff = 0.358005, levels = {80}, averages = {avg(1883, 2187)}}
+		if isSoD then
+			spellData[Nourish] = {coeff = 0.357, levels = {nil}, averages = generateSODAverages(38.949830, avg(1.61, 1.89), 0.606705, 0.167780)}
+		elseif isWrath then
+			spellData[Nourish] = {coeff = 0.358005, levels = {80}, averages = {avg(1883, 2187)}}
+		end
+		
 
 		talentData[GiftofNature] = {mod = 0.02, current = 0}
 		talentData[ImprovedRejuv] = {mod = 0.05, current = 0}
