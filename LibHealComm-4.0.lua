@@ -1609,7 +1609,17 @@ if( playerClass == "PRIEST" ) then
 					local unit = isWrath and "player" or guidToUnit[groupGUID]
 					local testUnit = guidToUnit[groupGUID]
 					-- Dispel Magic is chosen because it's learned before PoH and maintains 30y range through the expansions
-					if( id == group and guid ~= groupGUID and (IsSpellInRange(DispelMagic, unit) == 1 or CheckInteractDistance(unit, 4)) and UnitIsVisible(testUnit) and not UnitHasVehicleUI(testUnit) ) then
+
+					-- Patch 1.15.1 CheckInteractDistance is not able to be used on friendly targets in combat
+					local InCombatLockdownRestriction
+					if isClassicEra then
+						InCombatLockdownRestriction = InCombatLockdown() and not UnitCanAttack("player", unit)
+					else
+						InCombatLockdownRestriction = false
+					end
+					local inRange = IsSpellInRange(DispelMagic, unit) == 1 or (not InCombatLockdownRestriction and CheckInteractDistance(unit, 4))
+
+					if( id == group and guid ~= groupGUID and inRange and UnitIsVisible(testUnit) and not UnitHasVehicleUI(testUnit) ) then
 						targets = targets .. "," .. compressGUID[groupGUID]
 					end
 				end
