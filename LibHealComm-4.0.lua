@@ -1231,7 +1231,7 @@ if( playerClass == "DRUID" ) then
 					healModifier = healModifier * bonus
 				end
 			
-				spellPower = spellPower * ((spellData[spellName].coeff * 1.88) + talentData[EmpoweredTouch].current)
+				spellPower = spellPower * ((spellData[spellName].coeff * (isWrath and 1.88 or 1)) + talentData[EmpoweredTouch].current)
 			-- Healing Touch
 			elseif( spellName == HealingTouch ) then
 
